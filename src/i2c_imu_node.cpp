@@ -140,7 +140,7 @@ I2cImu::I2cImu() :
         imu_->setGyroEnable(true);
         imu_->setAccelEnable(true);
         imu_->setCompassEnable(true);
-	
+
 }
 
 void I2cImu::update()
@@ -155,9 +155,10 @@ void I2cImu::update()
 
 		imu_msg.header.stamp = current_time;
 		imu_msg.header.frame_id = imu_frame_id_;
-		imu_msg.orientation.x = imuData.fusionQPose.x();
-		imu_msg.orientation.y = imuData.fusionQPose.y();
-		imu_msg.orientation.z = imuData.fusionQPose.z();
+		// NED --> ENU coordinate frame conversion: Swap X->Y, invert Z
+		imu_msg.orientation.x = imuData.fusionQPose.y();
+		imu_msg.orientation.y = imuData.fusionQPose.x();
+		imu_msg.orientation.z = -imuData.fusionQPose.z();
 		imu_msg.orientation.w = imuData.fusionQPose.scalar();
 
 		imu_msg.angular_velocity.x = imuData.gyro.x();
@@ -214,7 +215,7 @@ bool I2cImu::ImuSettings::loadSettings()
 			m_I2CSlaveAddress = (unsigned char) temp_int;
 
 	settings_nh_->getParam("axis_rotation", m_axisRotation);
-	
+
 	//double declination_radians;
 	//settings_nh_->param("magnetic_declination", declination_radians, 0.0);
 	//m_compassAdjDeclination = angles::to_degrees(declination_radians);
@@ -292,14 +293,14 @@ bool I2cImu::ImuSettings::loadSettings()
 		m_compassCalMin = RTVector3(compass_min[0], compass_min[1], compass_min[2]);
 		m_compassCalMax = RTVector3(compass_max[0],compass_max[1], compass_max[2]);
 		m_compassCalValid = true;
-		
+
 		ROS_INFO("Got Calibration for Compass");
 	}
 	else
 	{
 	  	ROS_INFO("No Calibration for Compass");
 	}
-	
+
 	std::vector<double> accel_max, accel_min;
 	if (settings_nh_->getParam("calib/accel_min", accel_min)
 			&& settings_nh_->getParam("calib/accel_max", accel_max)
@@ -308,12 +309,12 @@ bool I2cImu::ImuSettings::loadSettings()
 		m_accelCalMin = RTVector3(accel_min[0], accel_min[1], accel_min[2]);
 		m_accelCalMax = RTVector3(accel_max[0],accel_max[1], accel_max[2]);
 		m_accelCalValid = true;
-		
+
 		ROS_INFO("Got Calibration for Accelerometer");
 	}
 	else
 	{
-	  	ROS_INFO("No Calibration for Accelerometer"); 
+	  	ROS_INFO("No Calibration for Accelerometer");
 	}
 
 
