@@ -234,6 +234,14 @@ bool I2cImu::ImuSettings::loadSettings()
 	settings_nh_->getParam("mpu9250/gyro_full_scale_range", m_MPU9250GyroFsr);
 	settings_nh_->getParam("mpu9250/gyro_low_pass_filter", m_MPU9250GyroLpf);
 
+	//MPU9255
+	settings_nh_->getParam("mpu9255/gyro_accel_sample_rate", m_MPU9255GyroAccelSampleRate);
+	settings_nh_->getParam("mpu9255/compass_sample_rate", m_MPU9255CompassSampleRate);
+	settings_nh_->getParam("mpu9255/accel_full_scale_range", m_MPU9255AccelFsr);
+	settings_nh_->getParam("mpu9255/accel_low_pass_filter", m_MPU9255AccelLpf);
+	settings_nh_->getParam("mpu9255/gyro_full_scale_range", m_MPU9255GyroFsr);
+	settings_nh_->getParam("mpu9255/gyro_low_pass_filter", m_MPU9255GyroLpf);
+
 	//GD20HM303D
 	settings_nh_->getParam("GD20HM303D/gyro_sample_rate", m_GD20HM303DGyroSampleRate);
 	settings_nh_->getParam("GD20HM303D/accel_sample_rate", m_GD20HM303DAccelSampleRate);
@@ -314,7 +322,9 @@ bool I2cImu::ImuSettings::loadSettings()
 
 void I2cImu::spin()
 {
-	ros::Rate r(1.0 / (imu_->IMUGetPollInterval() / 1000.0));
+	float rate;
+	settings_nh_->getParam("rate_hz", rate, static_cast<float>(1.0 / (imu_->IMUGetPollInterval() / 1000.0)));
+	ros::Rate r(rate);
 	while (ros::ok())
 	{
 		update();
