@@ -322,8 +322,8 @@ bool I2cImu::ImuSettings::loadSettings()
 
 void I2cImu::spin()
 {
-	float rate;
-	settings_nh_->getParam("rate_hz", rate, static_cast<float>(1.0 / (imu_->IMUGetPollInterval() / 1000.0)));
+	double rate;
+	nh_.param<double>("rate_hz", rate, 1.0 / (imu_->IMUGetPollInterval() / 1000.0));
 	ros::Rate r(rate);
 	while (ros::ok())
 	{
