@@ -36,7 +36,6 @@ public:
 	I2cImu();
 
 	void update();
-	void spin();
 
 private:
 	//ROS Stuff
@@ -53,6 +52,7 @@ private:
 
 	std::string imu_frame_id_;
 
+	double rate_;
 	ros::Time last_update_;
 	double declination_radians_;
 
@@ -142,10 +142,12 @@ I2cImu::I2cImu() :
 	imu_->setAccelEnable(true);
 	imu_->setCompassEnable(true);
 
+	private_nh_.param<double>("rate_hz", rate_, 1.0 / (imu_->IMUGetPollInterval() / 1000.0));
 }
 
 void I2cImu::update()
 {
+	ros::Rate r(rate_);
 
 	while (imu_->IMURead() && ros::ok())
 	{
@@ -196,21 +198,9 @@ void I2cImu::update()
 			euler_pub_.publish(msg);
 		}
 		ros::spinOnce();
-	}
-
-}
-
-
-void I2cImu::spin()
-{
-	double rate;
-	nh_.param<double>("rate_hz", rate, 1.0 / (imu_->IMUGetPollInterval() / 1000.0));
-	ros::Rate r(rate);
-	while (ros::ok())
-	{
-		update();
 		r.sleep();
 	}
+
 }
 
 
@@ -221,7 +211,7 @@ int main(int argc, char** argv)
 	ROS_INFO("RTIMU Node for ROS");
 
 	I2cImu i2c_imu;
-	i2c_imu.spin();
+	i2c_imu.update();
 
 	return (0);
 }
