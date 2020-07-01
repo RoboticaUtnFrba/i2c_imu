@@ -17,6 +17,7 @@
 //
 
 #include <exception>
+#include <memory>
 
 #include <ros/ros.h>
 #include <tf/transform_broadcaster.h>
@@ -57,18 +58,18 @@ private:
 	double declination_radians_;
 
 	//RTUIMULib stuff
-	RTIMU *imu_;
-
-	RTIMUSettings imu_settings_;
+	std::unique_ptr<RTIMU> imu_;
+	std::unique_ptr<RTIMUSettings> imu_settings_;
 };
 
 I2cImu::I2cImu() :
 		nh_(), private_nh_("~")
 {
 	if(private_nh_.hasParam("settings_directory")) {
-		std::string settings_directory;
+		std::string settings_directory, settings_filename;
 		private_nh_.getParam("settings_directory", settings_directory);
-		imu_settings_ = RTIMUSettings(settings_directory.c_str(), "RTIMULib");
+		private_nh_.param<std::string>("settings_filename", settings_filename, "RTIMULib");
+		imu_settings_.reset(new RTIMUSettings(settings_directory.c_str(), settings_filename.c_str()));
 	} else {
 		throw std::runtime_error("parameter settings_directory not set");
 	}
@@ -118,13 +119,13 @@ I2cImu::I2cImu() :
 		}
 	}
 
-	imu_settings_.loadSettings();
+	imu_settings_->loadSettings();
 
 	private_nh_.param("magnetic_declination", declination_radians_, 0.0);
 
 	// now set up the IMU
 
-	imu_ = RTIMU::createIMU(&imu_settings_);
+	imu_.reset(RTIMU::createIMU(imu_settings_.get()));
 	if (imu_ == NULL)
 	{
 		ROS_FATAL("I2cImu - %s - Failed to open the i2c device", __FUNCTION__);
@@ -147,58 +148,65 @@ I2cImu::I2cImu() :
 
 void I2cImu::update()
 {
-	ros::Rate r(rate_);
+	const ros::Duration d(1.0/rate_);
+	ros::Time begin(ros::Time::now());
 
-	while (imu_->IMURead() && ros::ok())
+	while (ros::ok())
 	{
-		RTIMU_DATA imuData = imu_->getIMUData();
-
-		ros::Time current_time = ros::Time::now();
-
-
-		imu_msg.header.stamp = current_time;
-		imu_msg.header.frame_id = imu_frame_id_;
-		// NED --> ENU coordinate frame conversion: Swap X->Y, invert Z
-		imu_msg.orientation.x = imuData.fusionQPose.y();
-		imu_msg.orientation.y = imuData.fusionQPose.x();
-		imu_msg.orientation.z = -imuData.fusionQPose.z();
-		imu_msg.orientation.w = imuData.fusionQPose.scalar();
-
-		imu_msg.angular_velocity.x = imuData.gyro.x();
-		imu_msg.angular_velocity.y = imuData.gyro.y();
-		imu_msg.angular_velocity.z = imuData.gyro.z();
-
-		imu_msg.linear_acceleration.x = imuData.accel.x() * G_2_MPSS;
-		imu_msg.linear_acceleration.y = imuData.accel.y() * G_2_MPSS;
-		imu_msg.linear_acceleration.z = imuData.accel.z() * G_2_MPSS;
-
-		imu_pub_.publish(imu_msg);
-
-		if (magnetometer_pub_ != NULL && imuData.compassValid)
+		if (imu_->IMURead())
 		{
-			sensor_msgs::MagneticField msg;
+			RTIMU_DATA imuData = imu_->getIMUData();
 
-			msg.header.frame_id=imu_frame_id_;
-			msg.header.stamp=ros::Time::now();
+			ros::Time current_time = ros::Time::now();
 
-			msg.magnetic_field.x = imuData.compass.x()/uT_2_T;
-			msg.magnetic_field.y = imuData.compass.y()/uT_2_T;
-			msg.magnetic_field.z = imuData.compass.z()/uT_2_T;
+			imu_msg.header.stamp = current_time;
+			imu_msg.header.frame_id = imu_frame_id_;
+			// NED --> ENU coordinate frame conversion: Swap X->Y, invert Z
+			imu_msg.orientation.x = imuData.fusionQPose.y();
+			imu_msg.orientation.y = imuData.fusionQPose.x();
+			imu_msg.orientation.z = -imuData.fusionQPose.z();
+			imu_msg.orientation.w = imuData.fusionQPose.scalar();
 
-			magnetometer_pub_.publish(msg);
-		}
+			imu_msg.angular_velocity.x = imuData.gyro.x();
+			imu_msg.angular_velocity.y = imuData.gyro.y();
+			imu_msg.angular_velocity.z = imuData.gyro.z();
 
-		if (euler_pub_ != NULL)
-		{
-			geometry_msgs::Vector3 msg;
-			msg.x = imuData.fusionPose.x();
-			msg.y = imuData.fusionPose.y();
-			msg.z = -imuData.fusionPose.z();
-			msg.z = (-imuData.fusionPose.z()) - declination_radians_;
-			euler_pub_.publish(msg);
+			imu_msg.linear_acceleration.x = imuData.accel.x() * G_2_MPSS;
+			imu_msg.linear_acceleration.y = imuData.accel.y() * G_2_MPSS;
+			imu_msg.linear_acceleration.z = imuData.accel.z() * G_2_MPSS;
+
+			if (ros::Time::now() - begin >= d)
+			{
+				imu_pub_.publish(imu_msg);
+
+				if (magnetometer_pub_ != NULL && imuData.compassValid)
+				{
+					sensor_msgs::MagneticField msg;
+
+					msg.header.frame_id=imu_frame_id_;
+					msg.header.stamp=ros::Time::now();
+
+					msg.magnetic_field.x = imuData.compass.x()/uT_2_T;
+					msg.magnetic_field.y = imuData.compass.y()/uT_2_T;
+					msg.magnetic_field.z = imuData.compass.z()/uT_2_T;
+
+					magnetometer_pub_.publish(msg);
+				}
+
+				if (euler_pub_ != NULL)
+				{
+					geometry_msgs::Vector3 msg;
+					msg.x = imuData.fusionPose.x();
+					msg.y = imuData.fusionPose.y();
+					msg.z = -imuData.fusionPose.z();
+					msg.z = (-imuData.fusionPose.z()) - declination_radians_;
+					euler_pub_.publish(msg);
+				}
+				// Update time
+				begin = ros::Time::now();
+			}
 		}
 		ros::spinOnce();
-		r.sleep();
 	}
 
 }
