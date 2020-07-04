@@ -161,17 +161,17 @@ void I2cImu::update()
 
 			imu_msg.header.stamp = current_time;
 			imu_msg.header.frame_id = imu_frame_id_;
-			// NED --> ENU coordinate frame conversion: Swap X->Y, invert Z
-			imu_msg.orientation.x = imuData.fusionQPose.y();
-			imu_msg.orientation.y = imuData.fusionQPose.x();
-			imu_msg.orientation.z = -imuData.fusionQPose.z();
+			// https://github.com/matlabbe/rtimulib_ros/commit/5ab52a9007492e7fff18fe0d721052e7987011ea
+			imu_msg.orientation.x = imuData.fusionQPose.x();
+			imu_msg.orientation.y = imuData.fusionQPose.y();
+			imu_msg.orientation.z = imuData.fusionQPose.z();
 			imu_msg.orientation.w = imuData.fusionQPose.scalar();
 
 			imu_msg.angular_velocity.x = imuData.gyro.x();
-			imu_msg.angular_velocity.y = imuData.gyro.y();
-			imu_msg.angular_velocity.z = imuData.gyro.z();
+			imu_msg.angular_velocity.y = -imuData.gyro.y();
+			imu_msg.angular_velocity.z = -imuData.gyro.z();
 
-			imu_msg.linear_acceleration.x = imuData.accel.x() * G_2_MPSS;
+			imu_msg.linear_acceleration.x = -imuData.accel.x() * G_2_MPSS;
 			imu_msg.linear_acceleration.y = imuData.accel.y() * G_2_MPSS;
 			imu_msg.linear_acceleration.z = imuData.accel.z() * G_2_MPSS;
 
